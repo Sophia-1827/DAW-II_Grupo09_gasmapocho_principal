@@ -1,4 +1,4 @@
-# backend-gas-mapocho
+# Gas Mapocho - repositorio principal
 
 Backend de microservicios del proyecto Gas Mapocho (Spring Boot 4.1.1, Spring Cloud 2025.1.3, Java 25).
 
@@ -7,11 +7,41 @@ Backend de microservicios del proyecto Gas Mapocho (Spring Boot 4.1.1, Spring Cl
 | Servicio | Puerto | Depende de |
 |---|---|---|
 | `eureka-server` | 8761 | - |
-| `api-gateway` | 8080 | Eureka |
-| `ms-usuarios` | 8081 | Eureka, PostgreSQL |
-| `ms-balones` | 8082 | Eureka, PostgreSQL, RabbitMQ |
-| `ms-movimientos` | 8083 | Eureka, PostgreSQL, RabbitMQ, ms-balones (Feign) |
-| `ms-reportes` | 8084 | Eureka, ms-balones y ms-movimientos (Feign) — sin base propia |
+| `config-server` | 8888 | Eureka, repo `DAW-II_Grupo09_gasmapocho_config-repo` en GitHub |
+| `api-gateway` | 8080 | Eureka, Config Server |
+| `ms-usuarios` | 8081 | Eureka, Config Server, PostgreSQL |
+| `ms-balones` | 8082 | Eureka, Config Server, PostgreSQL, RabbitMQ |
+| `ms-movimientos` | 8083 | Eureka, Config Server, PostgreSQL, RabbitMQ, ms-balones (Feign) |
+| `ms-reportes` | 8084 | Eureka, Config Server, ms-balones y ms-movimientos (Feign) — sin base propia |
+
+## Como clonar
+
+Cada servicio tiene su propio repositorio en GitHub (cuenta `Sophia-1827`, prefijo `DAW-II_Grupo09_gasmapocho_`).
+Este repo (`_principal`) trae el `docker-compose.yml`, los scripts de base de datos y `start-all.ps1`; para que las rutas
+funcionen, todos se clonan dentro de una misma carpeta y con el nombre corto de la columna "Carpeta":
+
+| Repo | Carpeta |
+|---|---|
+| `..._principal` | `principal` |
+| `..._eureka-server` | `eureka-server` |
+| `..._config-server` | `config-server` |
+| `..._config-repo` | `config-repo` (solo lectura: lo lee `config-server` desde GitHub) |
+| `..._api-gateway` | `api-gateway` |
+| `..._ms-usuarios` | `ms-usuarios` |
+| `..._ms-balones` | `ms-balones` |
+| `..._ms-movimientos` | `ms-movimientos` |
+| `..._ms-reportes` | `ms-reportes` |
+
+```bash
+mkdir gas-mapocho && cd gas-mapocho
+B=https://github.com/Sophia-1827/DAW-II_Grupo09_gasmapocho
+git clone ${B}_principal principal
+for s in eureka-server config-server config-repo api-gateway ms-usuarios ms-balones ms-movimientos ms-reportes; do
+  git clone ${B}_$s $s
+done
+```
+
+El frontend (Angular) esta aparte, en `DAW-II_Grupo09_gasmapocho_frontend`.
 
 ## Requisitos para correr el proyecto completo
 
@@ -55,10 +85,22 @@ export DB_PASSWORD='TuContraseñaAqui'
 
 Esto vale solo para esa ventana de terminal — hay que volver a setearlo si la cierras.
 
+## Configuracion centralizada (Config Server)
+
+Los servicios solo guardan en su `application.properties` el nombre, el puerto y la direccion de Eureka. El resto
+(base de datos, RabbitMQ, rutas del gateway, Circuit Breaker) lo sirve `config-server` desde el repo
+`DAW-II_Grupo09_gasmapocho_config-repo`; la carpeta `config-repo` solo hace falta clonarla si se quiere editar.
+Por eso hay que arrancar siempre Eureka y luego `config-server`, antes que los demas.
+
+- Usuario y contrasena de PostgreSQL: **no** estan en el repo. Cada quien define `DB_USER` y `DB_PASSWORD` (ver arriba).
+- Para probar un cambio de configuracion sin hacer push: `CONFIG_REPO_URI` apunta `config-server` a otra copia del repo.
+- Despues de cambiar un archivo del repo de configuracion hay que reiniciar el servicio afectado.
+
 ## Orden para levantar todo
 
 ```bash
 cd eureka-server && ./mvnw spring-boot:run      # esperar a que termine de arrancar
+cd config-server && ./mvnw spring-boot:run      # esperar a que termine; los demas leen su configuracion de aqui
 cd ms-usuarios && ./mvnw spring-boot:run
 cd ms-balones && ./mvnw spring-boot:run
 cd ms-movimientos && ./mvnw spring-boot:run
@@ -70,7 +112,7 @@ Eureka tarda ~30 segundos en propagar un registro nuevo a los demás servicios, 
 
 ## Correr todo con Docker (alternativa a instalar todo a mano)
 
-Hay un `docker-compose.yml` en la raíz que levanta los 6 microservicios + PostgreSQL + RabbitMQ con un solo comando, sin instalar nada más que Docker Desktop:
+Hay un `docker-compose.yml` en este repo (se ejecuta desde la carpeta `principal`) que levanta los 6 microservicios + PostgreSQL + RabbitMQ con un solo comando, sin instalar nada más que Docker Desktop:
 
 Antes crea tu archivo `.env` a partir de la plantilla y pon tu propia contraseña (el `.env` no se sube a GitHub):
 

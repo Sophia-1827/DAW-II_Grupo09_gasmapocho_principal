@@ -27,27 +27,49 @@ services:
       retries: 10
 
   eureka-server:
-    build: ./eureka-server
+    build: ../eureka-server
     ports:
       - "8761:8761"
 
-  ms-usuarios:
-    build: ./ms-usuarios
+  config-server:
+    build: ../config-server
+    ports:
+      - "8888:8888"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Repo de GitHub con la configuracion de los servicios; se puede cambiar desde el archivo .env
+      CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Sophia-1827/DAW-II_Grupo09_gasmapocho_config-repo}
+    depends_on:
+      eureka-server:
+        condition: service_started
+
+  ms-usuarios:
+    build: ../ms-usuarios
+    restart: on-failure
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_usuarios
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
     depends_on:
       eureka-server:
         condition: service_started
+      config-server:
+        condition: service_started
       postgres:
         condition: service_healthy
 
   ms-balones:
-    build: ./ms-balones
+    build: ../ms-balones
+    restart: on-failure
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_balones
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
@@ -55,15 +77,21 @@ services:
     depends_on:
       eureka-server:
         condition: service_started
+      config-server:
+        condition: service_started
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
   ms-movimientos:
-    build: ./ms-movimientos
+    build: ../ms-movimientos
+    restart: on-failure
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_movimientos
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
@@ -71,27 +99,41 @@ services:
     depends_on:
       eureka-server:
         condition: service_started
+      config-server:
+        condition: service_started
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
   ms-reportes:
-    build: ./ms-reportes
+    build: ../ms-reportes
+    restart: on-failure
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
     depends_on:
       eureka-server:
         condition: service_started
+      config-server:
+        condition: service_started
 
   api-gateway:
-    build: ./api-gateway
+    build: ../api-gateway
+    restart: on-failure
     ports:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
     depends_on:
       eureka-server:
+        condition: service_started
+      config-server:
         condition: service_started
 
 volumes:

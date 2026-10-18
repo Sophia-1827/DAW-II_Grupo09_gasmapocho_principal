@@ -3,7 +3,8 @@
 # (o usa -Dspring-boot.run.profiles=local si ya tienes application-local.properties en cada servicio).
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot
+# Los servicios estan en carpetas hermanas de esta (ver "Como clonar" en el README)
+$root = Split-Path $PSScriptRoot -Parent
 $javaHome = "C:\Program Files\Java\jdk-25.0.4"
 $env:JAVA_HOME = $javaHome
 
@@ -32,6 +33,7 @@ if ($pg.Status -ne "Running") { Write-Host "ADVERTENCIA: PostgreSQL no esta corr
 if ($rmq.Status -ne "Running") { Write-Host "ADVERTENCIA: RabbitMQ no esta corriendo" -ForegroundColor Yellow }
 
 Start-Servicio "eureka-server" 8761
+Start-Servicio "config-server" 8888
 Start-Servicio "ms-usuarios" 8081
 Start-Servicio "ms-balones" 8082
 Start-Servicio "ms-movimientos" 8083
