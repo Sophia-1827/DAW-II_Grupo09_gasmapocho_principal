@@ -1,3 +1,15 @@
+# Variables comunes a todos los servicios Spring.
+x-spring-env: &spring-env
+  # Direccion de Eureka dentro de la red de Docker (en application.properties queda localhost como valor por defecto)
+  EUREKA_URL: http://eureka-server:8761/eureka/
+  # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
+  SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
+  # OJO: no usar SPRING_CONFIG_IMPORT aqui: se SUMA al spring.config.import=configserver: del application.properties
+  # y ese segundo import (sin URL) intenta localhost:8888 y tumba el servicio. Basta con decirle la URL:
+  SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+  # Limita la memoria de cada JVM: son 7 servicios Java en el mismo Docker Desktop
+  JAVA_TOOL_OPTIONS: -Xms64m -Xmx320m -XX:+UseSerialGC
+
 services:
   postgres:
     image: postgres:18
@@ -28,37 +40,58 @@ services:
 
   eureka-server:
     build: ../eureka-server
+    restart: on-failure
     ports:
       - "8761:8761"
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx320m -XX:+UseSerialGC
+    healthcheck:
+      # La imagen no trae curl: se verifica que el puerto ya acepte conexiones
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8761"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
 
   config-server:
     build: ../config-server
+    restart: on-failure
     ports:
       - "8888:8888"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx320m -XX:+UseSerialGC
       # Repo de GitHub con la configuracion de los servicios; se puede cambiar desde el archivo .env
       CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Sophia-1827/DAW-II_Grupo09_gasmapocho_config-repo}
+      # CONFIG_SERVER_PROFILE=native (en .env) hace que lea la carpeta ../config-repo de tu PC en vez de GitHub,
+      # util para probar cambios de configuracion sin hacer push. Por defecto (git) lee GitHub.
+      SPRING_PROFILES_ACTIVE: ${CONFIG_SERVER_PROFILE:-git}
+      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config-repo/
+    volumes:
+      - ../config-repo:/config-repo:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8888"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
   ms-usuarios:
     build: ../ms-usuarios
     restart: on-failure
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
-      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      <<: *spring-env
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_usuarios
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
 
@@ -66,19 +99,16 @@ services:
     build: ../ms-balones
     restart: on-failure
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
-      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      <<: *spring-env
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_balones
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
       SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       rabbitmq:
@@ -88,19 +118,16 @@ services:
     build: ../ms-movimientos
     restart: on-failure
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
-      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      <<: *spring-env
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gasmapocho_movimientos
       DB_USER: gasmapocho
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el archivo .env}
       SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       rabbitmq:
@@ -110,15 +137,12 @@ services:
     build: ../ms-reportes
     restart: on-failure
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
-      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      <<: *spring-env
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
 
   api-gateway:
     build: ../api-gateway
@@ -126,15 +150,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      # Dentro de Docker los servicios llaman al Config Server por su nombre, sin esperar a que se registre en Eureka
-      SPRING_CLOUD_CONFIG_DISCOVERY_ENABLED: "false"
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      <<: *spring-env
     depends_on:
       eureka-server:
-        condition: service_started
+        condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres-data:
